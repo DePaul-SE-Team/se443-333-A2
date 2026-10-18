@@ -257,7 +257,7 @@ Use both approaches on a real codebase and compare their outcomes. Explain why t
 
 ### Environment Setup
 
-1. Clone the project:
+1. **Clone Petclinic before running Task 2.** From the parent directory of this assignment, run the commands below so `spring-petclinic` and this assignment folder are siblings. The default path in `task2/Main.java` requires this layout; if you clone elsewhere, update `repoPath`. A missing or uninitialized target repository prevents the Git analysis from running.
 
    ```sh
    git clone https://github.com/spring-projects/spring-petclinic
