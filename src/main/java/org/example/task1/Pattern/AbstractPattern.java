@@ -1,75 +1,74 @@
-// The package declaration specifies that this class belongs to the org.example.Pattern package.
 package org.example.task1.Pattern;
 
-// Importing the necessary classes from Spoon library for processing and reflecting on Java code.
-import spoon.processing.AbstractProcessor;
+import org.example.task1.Util.ModelUtil;
+import spoon.reflect.CtModel;
+import spoon.reflect.cu.SourcePosition;
 import spoon.reflect.declaration.CtElement;
-import spoon.reflect.declaration.CtMethod;
 
 import java.util.ArrayList;
-// Abstract class representing a generic pattern detection mechanism.
+import java.util.List;
+
+/**
+ * Base class for every static analysis rule (detector).
+ *
+ * A subclass only has to implement {@link #process()}: query {@link #model} for the
+ * AST nodes it cares about and call {@link #report(CtElement)} for each offending node.
+ */
 public abstract class AbstractPattern {
-    // Inner class 'elementSchema' is used to represent the structure of a detected code element.
-    public class elementSchema {
-        // Fields to store information about the detected element.
-        public String message;    // A message related to the detection (e.g., a warning or error message).
-        public String className;  // The name of the class where the detection occurred.
-        public String methodName; // The name of the method where the detection occurred.
-        public String path;       // The path of the file where the detection occurred.
-        public int startLine;     // The starting line number of the detected code element.
-        public int endLine;       // The ending line number of the detected code element.
-        public String code;       // The code snippet or line of code related to the detection.
 
-        // Constructor that initializes the fields when message, start line, end line, and code are given.
-        elementSchema(String message, int startLine, int endLine, String code){
+    /** One issue found by a detector. */
+    public static class Detection {
+        public final String message;   // e.g. "Empty Catch Block"
+        public final String path;      // absolute path of the source file
+        public final int startLine;
+        public final int endLine;
+        public final String code;      // source snippet of the offending element
+
+        public Detection(String message, String path, int startLine, int endLine, String code) {
             this.message = message;
-            this.startLine = startLine;
-            this.endLine = endLine;
-            this.code = code;
-        }
-
-        // Constructor that initializes all the fields, including className and methodName.
-        elementSchema(String message, String className, String methodName, int startLine, int endLine, String code){
-            this.className = className;
-            this.methodName = methodName;
-            this.message = message;
-            this.startLine = startLine;
-            this.endLine = endLine;
-            this.code = code;
-        }
-
-        // Constructor that initializes the fields with path, start line, end line, and code.
-        elementSchema(String message, String path, int startLine, int endLine, String code){
             this.path = path;
-            this.message = message;
             this.startLine = startLine;
             this.endLine = endLine;
             this.code = code;
         }
     }
 
-    // A list to store all detected elements.
-    ArrayList<elementSchema> elements = new ArrayList<>();
+    /** The parsed AST of the code under analysis. */
+    protected final CtModel model;
 
-    // Getter method that returns the list of detected elements.
-    public ArrayList<elementSchema> getDetection(){
-        return elements;
+    /** Human-readable name of the issue this rule detects; used in every report. */
+    private final String issueName;
+
+    private final List<Detection> detections = new ArrayList<>();
+
+    protected AbstractPattern(ModelUtil modelUtil, String issueName) {
+        this.model = modelUtil.getModel();
+        this.issueName = issueName;
     }
 
-    // Abstract method for processing patterns in the code (to be implemented by subclasses).
+    /** Scans {@link #model} and calls {@link #report(CtElement)} for every issue found. */
     public abstract void process();
 
+    /** Records {@code element} as an issue, capturing its file and line range. */
+    protected void report(CtElement element) {
+        SourcePosition position = element.getPosition();
+        detections.add(new Detection(
+                issueName,
+                position.getFile().toPath().toAbsolutePath().toString(),
+                position.getLine(),
+                position.getEndLine(),
+                element.toString()
+        ));
+    }
 
+    public List<Detection> getDetection() {
+        return detections;
+    }
 
-    // Abstract method for printing the detection results (to be implemented by subclasses).
     public void print() {
-        // Iterate through the list of detected empty catch blocks.
-        for (elementSchema et : getDetection()) {
-            // Format and print the message for each detected issue.
-            System.out.println(String.format(
-                    "Detected: %s at Line[%d:%d] in class %s",
-                    et.message, et.startLine, et.endLine, et.path
-            ));
+        for (Detection d : detections) {
+            System.out.printf("Detected: %s at Line[%d:%d] in class %s%n",
+                    d.message, d.startLine, d.endLine, d.path);
         }
     }
 }

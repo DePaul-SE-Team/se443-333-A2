@@ -2,48 +2,52 @@ package org.example.task2;
 
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
-import org.example.Util.CalculateGitDiff;
-import org.example.Util.CommitPair;
-import org.example.Util.ModelUtil;
+import org.example.task2.Util.CalculateGitDiff;
+import org.example.task2.Util.CommitPair;
+import org.example.task2.Util.ModelUtil;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
+/**
+ * Static regression test selection pipeline:
+ * diff -> call graph -> selected tests -> run with JaCoCo -> precision.
+ */
 public class Main {
     public static void main(String[] args) throws GitAPIException, IOException {
-        // -------- 1. get diff --------
+        // Repository under analysis (expected next to this project).
+        Path repoPath = Paths.get(System.getProperty("user.dir"), "..", "spring-petclinic");
 
-        // Define the path to the Java file to be analyzed
-        Path path = Paths.get(System.getProperty("user.dir"),"..", "spring-petclinic");
-        // Initialize the ModelUtil instance with the specified Java file
-        ModelUtil model = new ModelUtil(path);
+        // 1. Find the files changed by the most recent commit that touched Java code.
+        CalculateGitDiff gitDiff = new CalculateGitDiff(repoPath.toString(), true);
+        CommitPair pair = gitDiff.findMostRecentJavaChangePair();
+        if (pair == null) {
+            System.out.println("No commit with Java changes found in " + repoPath);
+            return;
+        }
 
-        // Use CalculateGitDiff in non-destructive (diff-only) mode so we don't modify the working tree
-        CalculateGitDiff diff = new CalculateGitDiff(path.toString(), true);
-        CommitPair pair = diff.findMostRecentJavaChangePair();
+        List<DiffEntry> changes = gitDiff.getDiffBetweenCommits(pair.getParentCommit(), pair.getCurrentCommit());
+        System.out.println("Files changed in " + pair.getCurrentCommit().getName() + ":");
+        for (DiffEntry change : changes) {
+            System.out.println(change.getNewPath());
+        }
 
-        // print the diff file
-        List<DiffEntry> diffEntry = diff.getDiffBetweenCommits(pair.getParentCommit(), pair.getCurrentCommit());
-        System.out.println("File changed for -> "+ pair.getCurrentCommit());
-        diffEntry.stream().forEach(entry -> {
-            System.out.println(entry.getNewPath());
-        });
-
-        // 2. Get Call Graph -> convert to -> Test-to-source hierarchy
-        //TODO
-
-        // 3. Select test by intersecting a) test-to-source mapping with b) code changes
+        // 2. Build the call graph and turn it into a test-to-source mapping.
+        ModelUtil model = new ModelUtil(repoPath);
         // TODO
 
-        // 4. Run the test using `TestExecutor` -  this is coded already, but you need to call the API.
+        // 3. Select tests by intersecting the test-to-source mapping with the changed files.
         // TODO
 
-        // 5. Parse Jacoco - aligns with final project as well -> output total files covered, line coverage and branch coverage
+        // 4. Run the selected tests with TestExecutor.runTestsInRepo(...).
         // TODO
 
-        // 6. Output precision
+        // 5. Parse jacoco.xml: total files covered, line coverage, branch coverage.
+        // TODO
 
+        // 6. Output precision = |Changed ∩ Covered| / |Covered|.
+        // TODO
     }
 }

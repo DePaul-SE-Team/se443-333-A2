@@ -3,13 +3,10 @@ package org.example.task2.Util;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.errors.AmbiguousObjectException;
-import org.eclipse.jgit.errors.IncorrectObjectTypeException;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 
@@ -17,112 +14,84 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * Reads commit history and diffs from a local Git repository using JGit.
+ *
+ * In diff-only mode (the default) the repository's working tree is never touched;
+ * {@link #gitCheckout} is only allowed when diff-only mode is turned off.
+ */
 public class CalculateGitDiff {
-    private FileRepositoryBuilder builder;
-    private   Repository repo;
-    private Git git;
+    private final Repository repo;
+    private final Git git;
     private final boolean diffOnly;
 
-    // Default constructor: safe diff-only mode
-    public CalculateGitDiff(String repoString) throws IOException, GitAPIException {
-        this(repoString, true);
+    public CalculateGitDiff(String repoPath) throws IOException {
+        this(repoPath, true);
     }
 
-    // Allow caller to decide whether checkouts are permitted
-    public CalculateGitDiff(String repoString, boolean diffOnly) throws IOException, GitAPIException {
+    public CalculateGitDiff(String repoPath, boolean diffOnly) throws IOException {
         this.diffOnly = diffOnly;
-        builder = new FileRepositoryBuilder();
-        repo = builder.setGitDir(new File(repoString+"/.git"))
-                .readEnvironment() // scan environment GIT variables
-                .findGitDir() // scan up the file system tree
+        this.repo = new FileRepositoryBuilder()
+                .setGitDir(new File(repoPath, ".git"))
+                .readEnvironment()
+                .findGitDir()
                 .build();
+        this.git = new Git(repo);
     }
+
     /**
-     * Traverses commits (from most recent backward) and returns
-     * the first commit that modified at least one .java file.
-     *
-     * @return RevCommit with Java modifications, or null if none found.
+     * Walks history from HEAD backwards and returns the newest commit (with its parent)
+     * that touched at least one .java file, or {@code null} if there is none.
      */
     public CommitPair findMostRecentJavaChangePair() throws GitAPIException, IOException {
-        this.git = new Git(repo);
-
         for (RevCommit commit : git.log().call()) {
-            if (commit.getParentCount() == 0) continue; // skip initial commit
-
+            if (commit.getParentCount() == 0) {
+                continue; // the initial commit has nothing to diff against
+            }
             RevCommit parent = commit.getParent(0);
-            List<DiffEntry> diffs = getDiffBetweenCommits(parent, commit);
-
-            boolean hasJavaChange = diffs.stream().anyMatch(entry ->
-                    entry.getNewPath().endsWith(".java") ||
-                            entry.getOldPath().endsWith(".java"));
-
-            if (hasJavaChange) {
-                return new CommitPair(parent, commit); // return both
+            boolean touchesJava = getDiffBetweenCommits(parent, commit).stream().anyMatch(entry ->
+                    entry.getNewPath().endsWith(".java") || entry.getOldPath().endsWith(".java"));
+            if (touchesJava) {
+                return new CommitPair(parent, commit);
             }
         }
-        return null; // no commit with Java changes found
+        return null;
     }
 
-    /**
-     * Helper: compute diffs between two commits.
-     */
+    /** Lists every file that differs between the two commits. */
     public List<DiffEntry> getDiffBetweenCommits(RevCommit oldCommit, RevCommit newCommit)
             throws IOException, GitAPIException {
-
-        RevTree oldTree = oldCommit.getTree();
-        RevTree newTree = newCommit.getTree();
-
         try (ObjectReader reader = repo.newObjectReader()) {
-            CanonicalTreeParser oldTreeIter = new CanonicalTreeParser();
-            oldTreeIter.reset(reader, oldTree);
+            CanonicalTreeParser oldTree = new CanonicalTreeParser();
+            oldTree.reset(reader, oldCommit.getTree());
 
-            CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
-            newTreeIter.reset(reader, newTree);
+            CanonicalTreeParser newTree = new CanonicalTreeParser();
+            newTree.reset(reader, newCommit.getTree());
 
-            return this.git.diff()
-                    .setOldTree(oldTreeIter)
-                    .setNewTree(newTreeIter)
+            return git.diff()
+                    .setOldTree(oldTree)
+                    .setNewTree(newTree)
                     .call();
-        } catch (IncorrectObjectTypeException e) {
-            throw new RuntimeException("Invalid commit object for diff.", e);
         }
     }
 
-    /**
-     * checkout a specific commit
-     * @param commit
-     */
-    public void gitCheckout(RevCommit commit){
-        // Perform checkout
+    /** Checks out {@code commit} in the working tree. Fails in diff-only mode. */
+    public void gitCheckout(RevCommit commit) {
+        if (diffOnly) {
+            throw new UnsupportedOperationException("gitCheckout is disabled in diffOnly mode");
+        }
+        if (commit == null) {
+            throw new IllegalArgumentException("commit must not be null for checkout");
+        }
         try {
-            if (diffOnly) {
-                throw new UnsupportedOperationException("gitCheckout is disabled in diffOnly mode");
-            }
-            if (git == null) {
-                this.git = new Git(repo);
-            }
-            if (commit == null) {
-                throw new IllegalArgumentException("commit must not be null for checkout");
-            }
-            git.checkout()
-                    .setName(commit.getName())
-                    .call();
+            git.checkout().setName(commit.getName()).call();
 
-            // Verify HEAD now points to this commit
-            Repository repo = git.getRepository();
             ObjectId headId = repo.resolve("HEAD");
-
             if (headId == null || !headId.equals(commit.getId())) {
-                throw new RuntimeException("[ERROR] Did not checkout properly. Expected: " + commit.getName() + " but HEAD is: " + headId);
+                throw new RuntimeException("[ERROR] Did not checkout properly. Expected: "
+                        + commit.getName() + " but HEAD is: " + headId);
             }
-
-        } catch (GitAPIException e) {
-            throw new RuntimeException(e);
-        } catch (AmbiguousObjectException e) {
-            throw new RuntimeException(e);
-        } catch (IncorrectObjectTypeException e) {
-            throw new RuntimeException(e);
-        } catch (IOException e) {
+        } catch (GitAPIException | IOException e) {
             throw new RuntimeException(e);
         }
     }

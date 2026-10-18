@@ -1,73 +1,76 @@
 package org.example.task2.Util;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
- * Small helper to programmatically run `mvn test` in a given Maven repository directory
- * for a provided list of impacted tests.
+ * Runs {@code mvn test [-Dtest=...] jacoco:report} inside another Maven project.
  *
- * Usage example:
- *   TestExecutor.runTestsInRepo("C:/my/repo", List.of("PathUtilTest","TestMappingTest"), timeout);
+ * Usage:
+ *   TestExecutor.runTestsInRepo("C:/my/repo", Set.of("PathUtilTest", "TestMappingTest"), 10);
  */
 public final class TestExecutor {
     private TestExecutor() {}
 
-
-    public static int runTestsInRepo(String repoPath, Set<String> testNames, long timeoutMinutes) throws IOException, InterruptedException {
+    /**
+     * @param repoPath       root of the Maven project (must contain pom.xml)
+     * @param testNames      tests to run; null or empty runs the whole suite
+     * @param timeoutMinutes how long to wait before killing Maven
+     * @return Maven's exit code (0 means all selected tests passed)
+     */
+    public static int runTestsInRepo(String repoPath, Set<String> testNames, long timeoutMinutes)
+            throws IOException, InterruptedException {
         Objects.requireNonNull(repoPath, "repoPath");
         Path repo = Paths.get(repoPath).toAbsolutePath();
-        if (!Files.exists(repo) || !Files.isDirectory(repo)) {
+        if (!Files.isDirectory(repo)) {
             throw new IllegalArgumentException("repoPath does not exist or is not a directory: " + repo);
         }
-
-        File pom = repo.resolve("pom.xml").toFile();
-        if (!pom.exists()) {
+        if (!Files.exists(repo.resolve("pom.xml"))) {
             throw new IllegalArgumentException("No pom.xml found under: " + repo);
         }
 
-        String pattern = null;
-        if (testNames != null && !testNames.isEmpty()) {
-            // Join test names with comma. Example: PathUtilTest,TestMappingTest
-            pattern = testNames.stream().collect(Collectors.joining(","));
-        }
+        Process process = new ProcessBuilder(buildMavenCommand(testNames))
+                .directory(repo.toFile())
+                .redirectErrorStream(true)
+                .start();
 
-        // Prefer a repo-local Maven wrapper if present (mvnw.cmd for Windows, mvnw for Unix)
-        String mvnExecutable = "mvn";
-        ProcessBuilder pb = new ProcessBuilder();
-        if (pattern != null && !pattern.isBlank()) {
-            pb.command("cmd.exe","/c", mvnExecutable, "test","-Dtest=" + pattern, "jacoco:report");
-        } else {
-            pb.command(mvnExecutable, "test","jacoco:report");
-        }
-
-        pb.directory(repo.toFile());
-        pb.redirectErrorStream(true);
-
-        Process p = pb.start();
-
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+        // Echo Maven's output as it runs.
+        try (BufferedReader output = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
-            while ((line = br.readLine()) != null) {
+            while ((line = output.readLine()) != null) {
                 System.out.println(line);
             }
         }
 
-        boolean finished = p.waitFor(timeoutMinutes, TimeUnit.MINUTES);
-        if (!finished) {
-            p.destroyForcibly();
+        if (!process.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
+            process.destroyForcibly();
             throw new RuntimeException("mvn test did not finish within timeout");
         }
-        return p.exitValue();
+        return process.exitValue();
+    }
+
+    private static List<String> buildMavenCommand(Set<String> testNames) {
+        List<String> command = new ArrayList<>();
+        // On Windows, mvn is a .cmd script and has to be launched through cmd.exe.
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            command.add("cmd.exe");
+            command.add("/c");
+        }
+        command.add("mvn");
+        command.add("test");
+        if (testNames != null && !testNames.isEmpty()) {
+            command.add("-Dtest=" + String.join(",", testNames));
+        }
+        command.add("jacoco:report");
+        return command;
     }
 }

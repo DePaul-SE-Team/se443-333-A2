@@ -4,30 +4,28 @@ Build a Spoon-based static analysis tool, then extend it to select regression te
 
 | Assignment | Topic | Grade weight | Due date |
 | :--- | :--- | :---: | :--- |
-| Part 1| [Static Analysis](#assignment-3-static-analysis) | 10% | February 18, 2026 · 11:59 PM |
-| Part 2 | [Static Test Selection](#assignment-4-static-test-selection) | 13% | Not specified in the source |
+| Part 1| [Static Analysis](#task-1-static-analysis) | 10% | November 2nd, 2026 · 11:59 PM |
+| Part 2 | [Static Test Selection](#task-2-static-test-selection) | 10% | November 2nd, 2026 · 11:59 PM |
 
 ## Contents
 
-- [Task 1: Static Analysis](#assignment-3-static-analysis)
+- [Task 1: Static Analysis](#task-1-static-analysis)
   - [Setup and starter code](#a3-setup)
   - [Required detectors](#a3-detectors)
   - [Part 1: Seeded files](#a3-part1)
   - [Part 2: Real repository](#a3-part2)
   - [Grading and submission](#a3-submission)
-- [Task 2: Static Test Selection](#assignment-4-static-test-selection)
+- [Task 2: Static Test Selection](#task-2-static-test-selection)
   - [Environment setup](#a4-setup)
   - [Step 0: Configure the repository](#a4-step0)
   - [Step 1: Build the static mapping](#a4-step1)
   - [Step 2: Identify changes](#a4-step2)
   - [Step 3: Select tests](#a4-step3)
   - [Step 4: Measure coverage](#a4-step4)
-  - [Deliverables](#a4-deliverables)
+  - [Grading and submission](#a4-deliverables)
 
 
 ## Task 1: Static Analysis
-
-> **Due:** February 18, 2026, at 11:59 PM · **Grade weight:** 10%
 
 ### Motivation
 
@@ -63,8 +61,8 @@ Accept the [GitHub Classroom assignment](https://classroom.github.com/a/RPWZOM_h
 
 ### Constraints
 
-- Add new detector implementations only under `src/test/java/.../detectors/`.
-- You may modify `Main.java` and `ModelUtil.java`.
+- Add new detector implementations only under `src/main/java/org/example/task1/Pattern/`.
+- You may modify `task1/Main.java` and `task1/Util/ModelUtil.java`. Extend the supplied `AbstractPattern` base class for new detectors.
 - Do **not** modify `BuggyFile.java`; treat it as production code you do not control.
 
 ### Prerequisites and Environment
@@ -77,36 +75,33 @@ Accept the [GitHub Classroom assignment](https://classroom.github.com/a/RPWZOM_h
 <details>
 <summary><strong>Maven dependencies</strong></summary>
 
-```xml
-<dependencies>
-  <dependency>
-    <groupId>fr.inria.gforge.spoon</groupId>
-    <artifactId>spoon-core</artifactId>
-    <version>10.4.2</version>
-    <scope>test</scope>
-  </dependency>
-  <dependency>
-    <groupId>org.junit.jupiter</groupId>
-    <artifactId>junit-jupiter</artifactId>
-    <version>5.10.2</version>
-    <scope>test</scope>
-  </dependency>
-</dependencies>
-```
+The checked-in `pom.xml` is authoritative. It currently declares:
+
+| Dependency | Version | Scope |
+| :--- | :--- | :--- |
+| Spoon (`spoon-core`) | 11.1.0 | compile |
+| JUnit Jupiter API (`junit-jupiter-api`) | 5.11.4 | test |
+| JGit (`org.eclipse.jgit`) | 7.4.0.202509020913-r | compile |
+| SLF4J Simple | 2.0.16 | compile |
+
+JUnit's API is supplied; no test engine or test suite is included. The POM also contains Maven plugin dependencies and uses `maven-plugin` packaging, although the starter contains no Mojo implementation. `mvn package` may therefore fail during descriptor generation; use `mvn compile` to compile the starter.
 
 </details>
+
+**Running the tool:** Open this Maven project in IntelliJ, import its dependencies, and select a JDK compatible with the target repository. Run `org.example.task1.Main` or `org.example.task2.Main` with the working directory set to this assignment’s root. Update the target path in the relevant `Main` first. Task 2’s pipeline must be completed before it can select tests and report coverage; its test executor also requires Maven on PATH.
 
 <a id="a3-detectors"></a>
 
 ### Objective and Required Detectors
 
-Use Spoon to analyze `BuggyFile.java` and detect common bug patterns and design issues. Implement detectors for **seven (7) issues in total**; some detectors may already be provided as examples.
+Use Spoon to analyze `BuggyFile.java` and detect common bug patterns and design issues. Use **eight detectors in total**: retain the supplied `EmptyCatch` and `EmptyMethod`, implement the four specified detectors below, and add two rules of your choice.
 
-> **Source ambiguity:** The PDF specifies seven issues, lists four patterns below, asks for two new rules, and provides both empty-catch and empty-method detectors. It does not clearly state which provided detectors count toward the seven.
+> This README counts all eight rules explicitly: two supplied examples, four required implementations, and two additional rules.
 
 #### 1. Always True Condition
 
 Look for `CtIf` nodes whose condition always evaluates to true.
+
 
 ```java
 public void method3() {
@@ -135,6 +130,7 @@ public void method5() {
 
 Detect file resources that are opened but never closed. Inspect `CtTry`, `CtCatch`, constructor calls such as `new FileReader(...)`, missing `close()` calls, and the absence of try-with-resources.
 
+
 ```java
 public void method6_1() {
     try {
@@ -145,9 +141,12 @@ public void method6_1() {
 }
 ```
 
+> **Hint** - Treat declared as try-with-resources resources as managed. Supporting other resource types, aliases, resources passed to helper methods, and proof of closure on every execution path is optional; document any limitations.
+
 #### 4. Division by Zero
 
 Look for division operations whose divisor is zero. Focus on `CtBinaryOperator`, division operators (`/`), and literal values equal to `0`.
+
 
 ```java
 public void method7_1() {
@@ -155,6 +154,8 @@ public void method7_1() {
     x = x / 0;
 }
 ```
+
+> **Hint** -  Detecting a variable initialized to zero, as in `method7_2()`, requires additional data-flow analysis and is optional.
 
 #### 5. Two New Rules
 
@@ -174,7 +175,7 @@ Develop two additional rules based on real bugs. Identify each rule and cite the
 
    ![Specific code to extend](assets/assignment3-page7-2.png)
 
-2. **Implement the static analysis tool.** Implement each rule as a separate detector. When an issue is detected, log relevant information, including the file name, line range, and code snippet or AST element.
+2. **Implement the static analysis tool.** Implement each rule as a separate detector. Call `report(element)` for each finding. The supplied base class stores the file path, line range, and AST-rendered code in a `Detection`; `print()` logs the issue name, line range, and file path. Include relevant code snippets in your README findings review.
 
 3. **Update `Main.java`** to invoke the implemented rules.
 
@@ -187,7 +188,7 @@ Develop two additional rules based on real bugs. Identify each rule and cite the
 ### Part 2: Run on a Real Repository
 
 1. **Select a target repository.** Choose a Java GitHub repository with no more than approximately **50,000 lines of code**.
-2. **Execute the analysis.** Clone the repository and run `Main` on its `src` directory. Change the project path currently specified around line 30 to the cloned repository’s source directory.
+2. **Execute the analysis.** Clone the repository and run `Main` on its `src` directory. Update the `Path path` assignment in `task1/Main.java` to the cloned repository’s source directory. The default resolves `BuggyFile.java` relative to the working directory, so run from this project’s root.
 
    ![Repository path configuration](assets/assignment3-page9-1.png)
 
@@ -203,15 +204,21 @@ Treat the lab as a mini static analysis framework: each detector is a rule, and 
 
 ### Grading and Submission
 
-The source emphasizes that perfect tool correctness is not the end goal and that inability to implement some functionality is acceptable. Its grading introduction ends with an incomplete sentence; no missing rubric text has been inferred.
+Task 1 is graded out of **10 points**:
 
-Submit **one ZIP file** containing:
+| Criterion | Points |
+| :--- | ---: |
+| Detector implementations and runner | 4 |
+| Real-repository execution and logs | 3 |
+| README report and findings review | 3 |
 
-- **Source code:** All required Spoon detectors under `src/test/java/.../detectors/`, updated `Main.java`, and `ModelUtil.java` if needed. `BuggyFile.java` must remain unchanged.
-- **Analysis output on a real repository — 35 points:** Run `Main` on the cloned Java repository’s `src` directory (approximately 50K LOC or less), and include detection logs in `.txt` format.
-- **README report — 35 points:** Include the sections below.
+Partial credit is available for incomplete functionality when limitations are clearly explained.
 
-> The PDF explicitly gives 35 points each for the analysis output and README report. It does not specify a point value for the source-code item.
+For both tasks, **push all code, reports, logs, and screenshots to your Classroom50 assignment repository**. Do not submit a ZIP file or anything in D2L. Include:
+
+- **Source code:** All required Spoon detectors under `src/main/java/org/example/task1/Pattern/`, updated `Main.java`, and `ModelUtil.java` if needed. `BuggyFile.java` must remain unchanged.
+- **Analysis output on a real repository:** Run `Main` on the cloned Java repository’s `src` directory (approximately 50K LOC or less), and include detection logs in `.txt` format.
+- **README report:** Include the sections below.
 
 #### Required README Sections
 
@@ -219,21 +226,21 @@ Submit **one ZIP file** containing:
 2. **Rule Specifications:** For every detector, describe what it detects and which Spoon AST nodes it uses.
 3. **Real-World Findings Review:** For every rule, provide two findings, a code snippet or source-file link, a TP/FP classification, and a short justification. Explain when findings are absent.
 
-The ZIP must contain source code, the log file, and `README.md`.
+Your Classroom50 repository must contain source code, the log file, and `README.md`.
 
 ---
 
 ## Task 2: Static Test Selection
 
-> **Grade weight:** 13%
+> **Grade weight:** 10%
 
 ### Goals
 
 - Understand how static call graphs approximate which tests are affected by a code change.
 - Use dynamic coverage (JaCoCo) to measure which tests execute changed code.
 - Compare static predictions with dynamic measurements.
-- Calculate precision for regression test selection.
-- Analyze uncovered changes and interpret false positives and false negatives.
+- Calculate precision and recall for regression test selection.
+- Measure false positives and false negatives using per-test coverage of the full suite, and explain why affected tests were missed.
 
 ### Background
 
@@ -254,7 +261,11 @@ Use both approaches on a real codebase and compare their outcomes. Explain why t
 
    ```sh
    git clone https://github.com/spring-projects/spring-petclinic
+   cd spring-petclinic
+   git checkout 142321aa3ed056eeda0662c1987b76db25b3d736
    ```
+
+   Use this fixed commit for analysis and test execution. Compare it with its first parent when identifying changes.
 
 2. Verify that it builds and runs tests:
 
@@ -262,7 +273,7 @@ Use both approaches on a real codebase and compare their outcomes. Explain why t
    mvn clean test
    ```
 
-3. The assignment states that JaCoCo is already configured in `pom.xml`. You may need to run `jacoco:report` to generate the HTML report. Its stated location is:
+3. Check the **target repository’s** `pom.xml` for JaCoCo configuration. The analyzer’s POM does not configure JaCoCo, and the supplied executor does not attach the coverage agent itself. Configure JaCoCo in the target project to instrument tests and generate HTML and XML reports before using the executor. The expected HTML location is:
 
    ```text
    target/site/jacoco/index.html
@@ -272,11 +283,13 @@ Use both approaches on a real codebase and compare their outcomes. Explain why t
 
 ### Step 0: Repository of Analysis
 
-In `Main.java`, around line 19, update the repository reference to your local project directory rather than the starter default:
+In `src/main/java/org/example/task2/Main.java`, update `repoPath` to the target repository root, which must contain `.git` and `pom.xml`. The default expects Petclinic beside this assignment directory:
 
 ```java
-Path path = Paths.get(); // TODO: change this to your repository path
+Path repoPath = Paths.get(System.getProperty("user.dir"), "..", "spring-petclinic");
 ```
+
+Run from this assignment’s root directory. The starter builds a Spoon model from the whole target repository; refine the input to `src/main/java` and `src/test/java` if needed to exclude generated or unrelated sources. `FileLevelCallGraphVisitor` and `JacocoParser` are empty implementation stubs, and steps 2–6 in `task2/Main.java` are TODOs.
 
 <a id="a4-step1"></a>
 
@@ -330,6 +343,8 @@ Tips:
 - Inspect `CtInvocation<?>` nodes and use `invocation.getExecutable().getDeclaringType()` to identify the target class.
 - Use a `Map<String, Set<String>>` whose key is a test method and whose value is its set of directly or indirectly referenced source classes.
 
+> **Hint** — (i) Use identifiers such as org.example.Service#find(int) and org.example.Service#find(String) so overloaded methods remain separate. (ii) You do not have to trace constructors, inherited methods or resolve calls made indirectly through interfaces, reflection, or Spring. Because those advanced cases may be skipped, the tool might miss an affected test. Students should describe those limitations in their report
+
 <a id="a4-step2"></a>
 
 ### Step 2: Identify Code Changes (Δ)
@@ -346,11 +361,11 @@ WebConfiguration.java
 Vet.java
 ```
 
-The test-to-source mapping identifies:
+Assume the test-to-source mapping is:
 
 ```text
-OwnerControllerTests#testProcessFindFormSuccess
-VetControllerTests#showVetList
+OwnerControllerTests#testProcessFindFormSuccess -> [OwnerController]
+VetControllerTests#showVetList -> [Vet]
 ```
 
 Which tests should run? Which changed file remains untested?
@@ -371,46 +386,24 @@ Changed = {
 
 #### JGit Starter Code
 
-Compare the current commit with the previous commit. The assignment states that this component is provided.
-
-<details>
-<summary><strong>JGit starter example</strong></summary>
+The supplied implementation is `task2/Util/CalculateGitDiff.java`, used by `task2/Main.java`:
 
 ```java
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import java.io.File;
-import java.util.List;
-import java.util.stream.Collectors;
-
-public class GitDiffUtil {
-    // Compare the old and new commits to identify code changes.
-    public static List<String> getChangedFiles(
-            String repoPath, String oldCommit, String newCommit) throws Exception {
-        Repository repository = new FileRepositoryBuilder()
-                .setGitDir(new File(repoPath, ".git"))
-                .build();
-
-        try (Git git = new Git(repository)) {
-            List<DiffEntry> diff = git.diff()
-                    .setOldTree(Utils.prepareTreeParser(repository, oldCommit))
-                    .setNewTree(Utils.prepareTreeParser(repository, newCommit))
-                    .call();
-
-            return diff.stream()
-                    .filter(d -> d.getNewPath().endsWith(".java"))
-                    .map(DiffEntry::getNewPath)
-                    .collect(Collectors.toList());
-        }
-    }
+CalculateGitDiff gitDiff = new CalculateGitDiff(repoPath.toString(), true);
+CommitPair pair = gitDiff.findMostRecentJavaChangePair();
+if (pair == null) {
+    System.out.println("No commit with Java changes found in " + repoPath);
+    return;
 }
+List<DiffEntry> changes = gitDiff.getDiffBetweenCommits(
+        pair.getParentCommit(), pair.getCurrentCommit());
 ```
 
-</details>
+`findMostRecentJavaChangePair()` walks history from `HEAD` and selects the first commit whose diff against its first parent touches a `.java` path. This can be older than `HEAD`, and the Java change can be outside production sources. Initial commits without parents are skipped.
 
-> The example filters by `.java` extension only; the written requirements also restrict changed files to `src/main/java/`. `Utils.prepareTreeParser` is referenced by the starter example but is not defined in the PDF.
+`getDiffBetweenCommits()` returns **all** diff entries for that pair. The starter prints their new paths without filtering. Implement the production-source filter described above before selecting tests: include additions, modifications, and renames whose new paths end in `.java` under `src/main/java/`; exclude deletions and unrelated files. Rename handling may require enabling rename detection.
+
+Diff-only mode is enabled in this example and does not change the target working tree. Build the mapping and collect coverage from the source revision corresponding to the selected child commit; the starter does not ensure that the working tree matches that revision. Record both commit IDs and the analyzed revision in your report.
 
 <a id="a4-step3"></a>
 
@@ -422,7 +415,7 @@ Using the static test-to-source mapping and JGit’s changed-file set:
 2. Load the list of changed files.
 3. Find intersections to identify tests that should rerun.
 
-You may implement this as you prefer. JaCoCo XML and Spoon use different naming conventions; you may need an adapter to normalize them.
+Normalize Git paths, Spoon class names, and JaCoCo source paths before comparison. Use source-file identities so multiple classes in one file count once. State whether your execution selects test classes or individual methods: class selection runs every test in a selected class, while method selection must retain the method identity.
 
 <a id="a4-step4"></a>
 
@@ -434,14 +427,20 @@ You may implement this as you prefer. JaCoCo XML and Spoon use different naming 
    mvn test -Dtest=<comma-separated-test-list> jacoco:report
    ```
 
-   The assignment provides `TestExecutor`. It is written for Windows; macOS may require adjustments. Invoke it using:
+   The supplied `TestExecutor` uses `cmd.exe /c mvn` on Windows and `mvn` on other systems. Maven must be on the process PATH. Its API requires a `Set<String>` and a timeout in minutes. Invoke it using:
 
    ```java
    TestExecutor.runTestsInRepo(
-       "C:/my/repo", List.of("PathUtilTest", "TestMappingTest"));
+       "C:/my/repo", Set.of("PathUtilTest", "TestMappingTest"), 10);
    ```
 
-2. Parse the coverage report at `target/site/jacoco/jacoco.xml`. Use XPath or another XML parser to extract covered class names. The suggested dependency is:
+   Import `java.util.Set`. To run individual methods, pass selectors such as `"OwnerControllerTests#testProcessFindFormSuccess"` rather than only class names. Check the returned exit code before using coverage results.
+
+   **Empty selection:** the helper runs the entire suite when passed `null` or an empty set. Handle an empty selection in your pipeline by skipping execution and reporting precision as not applicable.
+
+   **Fresh coverage:** the helper does not clean previous coverage data. Remove or reset old JaCoCo execution data and reports before collecting this run’s results. Its timeout check occurs after output streaming, so it is not a reliable wall-clock limit for a hung process.
+
+2. Parse the coverage report at `target/site/jacoco/jacoco.xml`. Use the JDK XML parser or another XML parser to extract per-source-file coverage. `JacocoParser` is a stub to implement. Count a production source file as covered only if it has at least one covered line; presence in the XML alone does not establish execution. The optional dependency below is not included in the starter POM:
 
    ```xml
    <dependency>
@@ -451,36 +450,55 @@ You may implement this as you prefer. JaCoCo XML and Spoon use different naming 
    </dependency>
    ```
 
-3. Compare the changed-file set from Git with the covered-file set from JaCoCo. Compute `Changed ∩ Covered`.
-4. Compute precision:
+3. Report JaCoCo **line and branch coverage** for the selected tests: `covered / (covered + missed) × 100%` (N/A if the denominator is zero). List changed files executed by these tests: `Changed ∩ Covered`.
 
-   ```text
-   Precision = |Changed ∩ Covered| / |Covered|
-   ```
+   - **Covered:** Number of lines or branches executed by the tests.
+   - **Missed:** Number of lines or branches not executed.
+   - **Formula:** Divide covered by the total (`covered + missed`), then multiply by 100. Calculate line and branch coverage separately.
+   - **Example:** 80 covered lines and 20 missed lines give `80 / (80 + 20) × 100% = 80%` line coverage.
+   - **Line coverage:** Percentage of executable lines that ran.
+   - **Branch coverage:** Percentage of decision outcomes exercised, such as the true and false paths of an `if`.
+   - **`Changed ∩ Covered`:** Files that were both changed and executed. This does not establish that the changed lines ran.
+   - These measurements describe code execution, not whether the right tests were selected.
 
-   Precision measures how many files executed by the selected tests were part of the recent change.
+4. Evaluate test selection:
 
-   - `Changed`: set of modified files.
-   - `Covered`: files executed by selected tests, obtained from JaCoCo.
-   - `∩`: intersection; files both changed and executed.
+   - Run the full test suite as a separate baseline, collecting fresh coverage for each test on the same source revision. Identify which tests execute at least one changed production source file.
+   - **TP:** A selected test executes a changed file.
+   - **FP:** A selected test does not execute any changed file.
+   - **FN:** An unselected test executes a changed file.
+   - **Precision:** `TP / (TP + FP)`.
+   - **Recall:** `TP / (TP + FN)`.
+   - Report both metrics and TP, FP, and FN counts. Use test methods or test classes consistently; report a metric as N/A only when its denominator is zero.
+   - Keep the full-suite baseline data separate from the selected-test coverage report required in step 3.
 
 5. Answer:
 
-   - Report your computed precision. Based on it, how good is your tool at predicting which tests to run?
+   - Report TP, FP, FN, precision, and recall. Explain false positives and false negatives, including limitations of the static analysis.
    - Why might some changed files not appear in the JaCoCo report? Consider configuration classes, unused code, and paths not exercised by tests.
 
 <a id="a4-deliverables"></a>
 
-### Deliverables
+### Grading and Submission
 
-Write sections 1–6 below in **`readme.md` at the root of your codebase**, and submit the codebase as item 7.
+**Submission:** Push all code, reports, logs, and screenshots to your Classroom50 assignment repository. Do not submit a ZIP file or anything in D2L.
+
+Task 2 is graded out of **10 points**:
+
+| Criterion | Points |
+| :--- | ---: |
+| Call graph, changed-file detection, and test selection | 4 |
+| Selected-test execution and line and branch coverage | 3 |
+| Precision, recall, and README evidence including warm-up answers | 3 |
+
+Write sections 1–6 below in **`readme.md` at the root of your codebase**, and push the codebase and all evidence to Classroom50 as item 7.
 
 | Section | Required content | Screenshot requirement |
 | :--- | :--- |---|
 | 1. Static Call Graph | Show the tool’s mapping between tests and source classes, using console output or a CSV extract. | Call-graph summary or mapping file. |
 | 2. Code Changes (Δ) | List files detected as changed between two commits. | JGit terminal output or printed changed-file list. |
 | 3. Selected Tests | Show tests automatically selected by intersecting the test-to-source mapping with changed files. | Console or log output showing selected tests. |
-| 4. Dynamic Coverage Report | Demonstrate that only selected tests ran and generated JaCoCo data. | JaCoCo `index.html` showing covered classes and percentages. |
-| 5. Precision | Present computed metrics, explain their meaning, and interpret their quality. | Screenshot or table showing computed values. |
+| 4. Dynamic Coverage Report | Demonstrate that only selected tests ran and report **both line and branch coverage**. | JaCoCo `index.html` showing both coverage percentages, or not applicable where no corresponding lines or branches exist. |
+| 5. Precision and Recall | Report TP, FP, FN, precision, and recall using the full-suite per-test coverage baseline. Explain false positives and false negatives. | Table showing per-test classifications and both computed metrics. |
 | 6. Warm-up Questions | Answer all warm-up questions from the assignment. | Brief written reflection; no screenshot needed. |
-| 7. Codebase | Submit your code in addition to the screenshots. | Code must run without issues. |
+| 7. Codebase | Push your code and screenshots to Classroom50. | Code must run without issues. |

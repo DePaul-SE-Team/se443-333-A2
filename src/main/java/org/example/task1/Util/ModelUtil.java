@@ -1,87 +1,53 @@
 package org.example.task1.Util;
 
-import org.example.Pattern.AbstractPattern;
+import org.example.task1.Pattern.AbstractPattern;
 import spoon.Launcher;
-import spoon.processing.AbstractProcessor;
-import spoon.processing.ProcessingManager;
-import spoon.processing.Processor;
 import spoon.reflect.CtModel;
-import spoon.reflect.factory.Factory;
-import spoon.support.QueueProcessingManager;
+
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Utility class for managing the analysis of Java source code using the Spoon library.
- * Provides methods to parse a Java file and apply custom static analysis rules (processors) to the parsed Abstract Syntax Tree (AST).
+ * Parses Java source code into a Spoon AST ({@link CtModel}) and runs a list of
+ * detectors over it.
+ *
+ * Typical use: construct with a file or directory, {@link #addRuleToAnalyze} each rule,
+ * then call {@link #runAnalysis()} and {@link #print()}.
  */
-public class ModelUtil{
+public class ModelUtil {
 
-    // Initialize the Spoon Launcher instance for parsing Java source code
-    private static final Launcher launcher = new Launcher();
-    final Factory factory = launcher.getFactory();
-    private CtModel model; // The parsed Abstract Syntax Tree (AST) of the Java source code
-    ArrayList<AbstractPattern> rules = new ArrayList<>(); // List to hold custom analysis rules (processors)
+    private final CtModel model;
+    private final List<AbstractPattern> rules = new ArrayList<>();
 
-    /**
-     * Constructs a ModelUtil instance and parses the specified Java file into an AST.
-     *
-     * @param path The path to the Java source file to be analyzed.
-     */
+    /** @param path a single .java file or a directory of sources to parse */
     public ModelUtil(Path path) {
-        // Add the Java file to be parsed by Spoon
+        Launcher launcher = new Launcher();
         launcher.addInputResource(path.toString());
-
-        // Configure the environment settings for the launcher
-        configureLauncherEnvironment();
-
-        // Run the launcher to parse the Java file and generate the AST
+        launcher.getEnvironment().setCommentEnabled(false);
+        launcher.getEnvironment().setIgnoreDuplicateDeclarations(true);
+        launcher.getEnvironment().setCopyResources(false);
+        launcher.getEnvironment().setIgnoreSyntaxErrors(true);
         model = launcher.buildModel();
     }
 
-    public CtModel getModel(){
-        return model; // Returns the parsed AST model
+    public CtModel getModel() {
+        return model;
     }
 
-    /**
-     * Configures the environment settings for the Spoon launcher, such as enabling or disabling comments,
-     * ignoring duplicate declarations, and handling syntax errors.
-     */
-    private void configureLauncherEnvironment() {
-        // Disable comments in the AST
-        launcher.getEnvironment().setCommentEnabled(false);
-
-        // Ignore duplicate declarations in the source code
-        launcher.getEnvironment().setIgnoreDuplicateDeclarations(true);
-
-        // Prevent copying external resources during parsing
-        launcher.getEnvironment().setCopyResources(false);
-
-        // Ignore syntax errors during parsing
-        launcher.getEnvironment().setIgnoreSyntaxErrors(true);
-    }
-
-    /**
-     * Adds a custom static analysis rule (processor) to be applied to the parsed Java code.
-     * The rule will be applied to all classes in the parsed Abstract Syntax Tree (AST).
-     *
-     * @param rule The custom processor (rule) that implements the static analysis logic.
-     */
     public void addRuleToAnalyze(AbstractPattern rule) {
-        rules.add(rule); // Adds the provided static analysis rule (processor) to the list of rules
+        rules.add(rule);
     }
 
-    public void runAnalysis(){
-        // Process all rules (static analysis processors) added to the ModelUtil instance
+    public void runAnalysis() {
         for (AbstractPattern rule : rules) {
-            rule.process(); // Apply the custom rule to the AST
+            rule.process();
         }
     }
 
     public void print() {
-        // Print the results of the analysis for each rule
         for (AbstractPattern rule : rules) {
-            rule.print(); // Output the results of each rule's analysis
+            rule.print();
         }
     }
 }
